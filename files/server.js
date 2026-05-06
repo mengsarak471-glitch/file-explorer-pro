@@ -604,9 +604,7 @@ app.get('/api/items/:id', protect, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════
 app.post('/api/seed', async (req, res) => {
   try {
-    // Block in production
-    if (process.env.NODE_ENV === 'production')
-      return res.status(403).json({ success: false, error: 'Seed disabled in production' });
+    // Only allow seed if admin doesn't exist yet
 
     const existing = await User.findOne({ username: 'admin' });
     if (existing) return res.json({ success: true, message: 'Already seeded' });
