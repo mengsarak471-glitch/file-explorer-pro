@@ -9,6 +9,7 @@ const { Readable } = require('stream');
 require('dotenv').config();
 
 const app = express();
+app.use(cors()); // ដាក់បន្ទាត់នេះនៅខាងលើគេ បន្ទាប់ពីប្រកាស app = express()
 
 // ════════════════════════════════════════════════════════════════════
 //  CORS
@@ -595,6 +596,31 @@ app.get('/api/items/:id', protect, async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ════════════════════════════════════════════════════════════════════
+//  TEMP ADMIN SETUP
+//  🔒 SECURITY: បន្ថែមកូដនេះជាបណ្ដោះអាសន្នក្នុង server.js ដើម្បីបង្កើត User
+// ════════════════════════════════════════════════════════════════════
+app.get('/api/setup-admin', async (req, res) => {
+    try {
+        // Check if admin already exists
+        const existing = await User.findOne({ username: 'admin' });
+        if (existing) return res.json({ success: true, message: 'Admin already exists' });
+        
+        // Create admin user
+        const { user: admin } = await createUserWithDrive({
+            username: 'admin', 
+            password: 'admin123',
+            displayName: 'Administrator', 
+            role: 'admin',
+            avatarColor: '#f85149',
+        }, ['Desktop', 'Documents', 'Downloads', 'Pictures', 'Projects']);
+        
+        res.json({ success: true, message: 'Admin created! Username: admin, Password: admin123' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // ════════════════════════════════════════════════════════════════════
