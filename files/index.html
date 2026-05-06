@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║   Windows 11 File Explorer — Upgraded v2.0                          ║
+  ║                                                                      ║
+  ║   NEW FEATURES:                                                      ║
+  ║   1. Keep Data per User (MongoDB + Cloudinary — scoped by userId)   ║
+  ║   2. User Authentication (Login with Username + Password)           ║
+  ║   3. Data Sharing (each user has private storage, admin sees all)   ║
+  ║   4. Login & Isolated Data (User A can't see User B's files)        ║
+  ║   5. Credentials stored securely (bcrypt + JWT, admin-only list)    ║
+  ║   6. Edit Profile/Username/Password via Request → Admin approval    ║
+  ║   7. KH / EN language toggle (Khmer OS Siemreap / Times New Roman) ║
+  ║   8. Dark Mode / Light Mode toggle                                  ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>File Explorer Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ══════════════════════════════════════════════════════
+   CSS VARIABLES — Dark / Light themes
+   ══════════════════════════════════════════════════════ */
+:root {
+  --bg-base:     #0d1117;
+  --bg-surface:  #161b22;
+  --bg-card:     #1c2128;
+  --bg-hover:    rgba(255,255,255,0.06);
+  --bg-selected: rgba(31,111,235,0.2);
+  --border:      rgba(255,255,255,0.07);
+  --border-focus:rgba(58,166,255,0.5);
+  --text-primary:#e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:  #3d444d;
+  --accent:      #1f6feb;
+  --accent-hover:#388bfd;
+  --accent-light:rgba(31,111,235,0.15);
+  --accent-text: #58a6ff;
+  --danger:      #f85149;
+  --danger-bg:   rgba(248,81,73,0.12);
+  --success:     #3fb950;
+  --success-bg:  rgba(63,185,80,0.12);
+  --warning:     #d29922;
+  --shadow-md:   0 8px 32px rgba(0,0,0,0.5);
+  --shadow-lg:   0 16px 48px rgba(0,0,0,0.7);
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --font-en:     'Times New Roman', Times, serif;
+  --font-kh:     'Kantumruy Pro', 'Khmer OS Siemreap', sans-serif;
+  --font:        var(--font-en);
+}
+
+[data-theme="light"] {
+  --bg-base:     #f3f4f6;
+  --bg-surface:  #ffffff;
+  --bg-card:     #f8f9fa;
+  --bg-hover:    rgba(0,0,0,0.04);
+  --bg-selected: rgba(31,111,235,0.1);
+  --border:      rgba(0,0,0,0.09);
+  --border-focus:rgba(31,111,235,0.5);
+  --text-primary:#1a1e24;
+  --text-secondary:#5a6270;
+  --text-muted:  #9aa2af;
+  --accent:      #1f6feb;
+  --accent-hover:#155bc9;
+  --accent-light:rgba(31,111,235,0.08);
+  --accent-text: #1f6feb;
+  --danger:      #cf3626;
+  --danger-bg:   rgba(207,54,38,0.08);
+  --success:     #1a7f37;
+  --success-bg:  rgba(26,127,55,0.08);
+  --shadow-md:   0 4px 20px rgba(0,0,0,0.1);
+  --shadow-lg:   0 12px 40px rgba(0,0,0,0.15);
+}
+
+[data-lang="kh"] { --font: var(--font-kh); }
+
+/* ══════════════════════════════════════════════════════
+   RESET & BASE
+   ══════════════════════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  height: 100vh; overflow: hidden;
+  user-select: none;
+  transition: background .25s, color .25s;
+}
+
+/* ══════════════════════════════════════════════════════
+   LOGIN SCREEN
+   ══════════════════════════════════════════════════════ */
+#login-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg-base);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 0;
+}
+.login-bg-grid {
+  position: absolute; inset: 0; overflow: hidden; pointer-events:none;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.login-glow {
+  position: absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(31,111,235,0.12) 0%, transparent 70%);
+  pointer-events:none;
+}
+.login-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  width: 100%; max-width: 380px;
+  position: relative; z-index: 1;
+  box-shadow: var(--shadow-lg);
+  animation: loginIn .4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes loginIn { from{opacity:0;transform:translateY(24px) scale(.97)} to{opacity:1;transform:none} }
+.login-card::before {
+  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:50%; height:1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+.login-logo {
+  text-align:center; margin-bottom:28px;
+}
+.login-logo-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  background: linear-gradient(135deg, #1f6feb, #58a6ff);
+  display: flex; align-items:center; justify-content:center;
+  font-size:26px; margin:0 auto 12px;
+  box-shadow: 0 0 32px rgba(31,111,235,0.4);
+}
+.login-title {
+  font-size:20px; font-weight:700; margin-bottom:4px;
+}
+.login-sub {
+  font-size:12px; color:var(--text-secondary);
+  font-family: var(--font-en); /* always EN for subtitle */
+}
+.login-tabs {
+  display:flex; gap:2px; background:var(--bg-base);
+  border-radius:var(--radius-sm); padding:3px; margin-bottom:20px;
+}
+.login-tab {
+  flex:1; padding:6px; text-align:center; border-radius:5px;
+  font-size:12px; cursor:pointer; color:var(--text-secondary);
+  transition:all .15s; border:none; background:transparent;
+  font-family: var(--font);
+}
+.login-tab.active {
+  background:var(--bg-surface); color:var(--text-primary);
+  box-shadow:0 1px 4px rgba(0,0,0,.25);
+}
+.form-group { margin-bottom:14px; }
+.form-label {
+  display:block; font-size:11px; color:var(--text-secondary);
+  margin-bottom:5px; letter-spacing:.4px;
+  font-family: var(--font-en);
+}
+.form-input {
+  width:100%; padding:9px 12px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-sm); color:var(--text-primary);
+  font-size:13px; outline:none; transition:border .15s;
+  font-family: var(--font-en);
+}
+.form-input:focus { border-color:var(--border-focus); box-shadow:0 0 0 3px var(--accent-light); }
+.btn-primary {
+  width:100%; padding:10px;
+  background:var(--accent); color:#fff;
+  border:none; border-radius:var(--radius-sm);
+  font-size:13px; font-weight:600; cursor:pointer;
+  transition:background .15s;
+  font-family: var(--font);
+}
+.btn-primary:hover { background:var(--accent-hover); }
+.login-err {
+  background:var(--danger-bg); border:1px solid rgba(248,81,73,0.25);
+  border-radius:var(--radius-sm); padding:8px 12px;
+  font-size:12px; color:var(--danger); margin-bottom:12px;
+  display:none;
+}
+.login-footer {
+  margin-top:16px; text-align:center; font-size:11px; color:var(--text-muted);
+}
+
+/* ══════════════════════════════════════════════════════
+   APP SHELL
+   ══════════════════════════════════════════════════════ */
+#app { display:flex; flex-direction:column; height:100vh; transition:opacity .2s; }
+#app.hidden { display:none; }
+
+/* ── Title Bar ── */
+#titlebar {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 12px;
+  background:var(--bg-surface); border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--text-secondary); min-height:36px;
+  transition:background .25s;
+}
+#titlebar .title { flex:1; }
+.win-btn { width:12px; height:12px; border-radius:50%; border:none; cursor:pointer; }
+.win-btn.close { background:#ff5f57; }
+.win-btn.min   { background:#febc2e; }
+.win-btn.max   { background:#28c840; }
+
+/* title bar right controls */
+.titlebar-right {
+  display:flex; align-items:center; gap:6px; margin-left:auto;
+}
+.icon-btn {
+  width:28px; height:28px; border-radius:6px;
+  background:transparent; border:1px solid var(--border);
+  color:var(--text-secondary); cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.icon-btn:hover { background:var(--bg-hover); color:var(--text-primary); border-color:var(--border-focus); }
+
+/* user avatar chip */
+.user-chip {
+  display:flex; align-items:center; gap:7px;
+  padding:3px 10px 3px 4px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:20px; cursor:pointer; transition:all .15s;
+}
+.user-chip:hover { border-color:var(--border-focus); }
+.user-chip-avatar {
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#fff; flex-shrink:0;
+}
+.user-chip-name { font-size:11px; font-weight:600; color:var(--text-primary); }
+.user-chip-role { font-size:9px; color:var(--text-muted); }
+
+/* ── Loading Bar ── */
+#loading-bar {
+  height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--accent-text),var(--accent));
+  background-size:200% 100%;
+  animation:shimmer 1.2s infinite;
+  display:none;
+}
+#loading-bar.active { display:block; }
+@keyframes shimmer { 0%{background-position:100%} 100%{background-position:-100%} }
+
+/* ── Toolbar ── */
+#toolbar {
+  display:flex; align-items:center; gap:4px;
+  padding:6px 12px;
+  background:var(--bg-base);
+  border-bottom:1px solid var(--border);
+  transition:background .25s;
+}
+.tb-btn {
+  display:flex; align-items:center; justify-content:center;
+  width:30px; height:30px;
+  border:none; border-radius:var(--radius-sm);
+  background:transparent; color:var(--text-secondary);
+  cursor:pointer; transition:all .15s; font-size:14px;
+}
+.tb-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
+.tb-btn:disabled { opacity:.3; cursor:not-allowed; }
+#btn-upload {
+  display:flex; align-items:center; gap:5px;
+  padding:0 10px; height:30px; border:none;
+  border-radius:var(--radius-sm);
+  background:var(--accent-light); color:var(--accent-text);
+  font-size:12px; cursor:pointer; transition:all .15s;
+  font-family: var(--font);
+}
+#btn-upload:hover { background:rgba(31,111,235,0.28); }
+#file-upload-input { display:none; }
+#addressbar {
+  display:flex; align-items:center; flex:1;
+  margin:0 8px; padding:4px 10px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-sm); gap:4px; font-size:13px; min-height:30px;
+}
+.breadcrumb {
+  color:var(--text-secondary); padding:2px 4px;
+  border-radius:4px; transition:all .15s;
+}
+.breadcrumb:hover { background:var(--bg-hover); color:var(--text-primary); cursor:pointer; }
+.breadcrumb.active { color:var(--text-primary); }
+.breadcrumb-sep { color:var(--text-muted); font-size:11px; }
+#searchbar {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-sm); width:180px; height:30px;
+}
+#searchbar input {
+  background:transparent; border:none; outline:none;
+  color:var(--text-primary); font-size:12px; width:100%;
+  font-family: var(--font);
+}
+#searchbar input::placeholder { color:var(--text-muted); }
+.view-toggle {
+  display:flex; gap:2px; padding:2px;
+  border-radius:var(--radius-sm);
+  background:var(--bg-card); border:1px solid var(--border);
+}
+.view-btn {
+  padding:3px 7px; border-radius:4px; border:none;
+  background:transparent; color:var(--text-secondary);
+  cursor:pointer; font-size:13px; transition:all .15s;
+}
+.view-btn:hover { color:var(--text-primary); background:var(--bg-hover); }
+.view-btn.active { background:var(--accent-light); color:var(--accent-text); }
+
+/* ── Main Layout ── */
+#main { display:flex; flex:1; overflow:hidden; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width:200px; min-width:200px; padding:8px 4px;
+  overflow-y:auto; border-right:1px solid var(--border);
+  background:var(--bg-surface); transition:background .25s;
+}
+.sidebar-section { margin-bottom:4px; }
+.sidebar-header {
+  font-size:10px; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:1px;
+  padding:6px 12px 4px;
+  font-family: var(--font-en);
+}
+.sidebar-item {
+  display:flex; align-items:center; gap:8px;
+  padding:5px 12px; border-radius:var(--radius-sm);
+  cursor:pointer; font-size:13px; color:var(--text-secondary);
+  transition:all .15s; margin:1px 4px;
+  font-family: var(--font);
+}
+.sidebar-item:hover { background:var(--bg-hover); color:var(--text-primary); }
+.sidebar-item.active { background:var(--accent-light); color:var(--accent-text); }
+.sidebar-icon { font-size:14px; width:16px; text-align:center; }
+
+/* ── Content ── */
+#content { flex:1; padding:14px; overflow-y:auto; position:relative; }
+#file-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(100px,1fr));
+  gap:4px;
+}
+.file-item {
+  display:flex; flex-direction:column; align-items:center;
+  padding:10px 8px; border-radius:var(--radius-sm);
+  cursor:pointer; transition:all .18s cubic-bezier(0.34,1.56,0.64,1);
+  text-align:center;
+  animation:itemIn .18s ease-out both;
+}
+.file-item:hover {
+  background:var(--bg-hover);
+  transform:scale(1.04);
+  box-shadow:0 0 0 1px var(--border),0 4px 16px rgba(0,0,0,.3);
+}
+.file-item.selected { background:var(--bg-selected); box-shadow:0 0 0 1px rgba(58,166,255,0.3); }
+.file-icon { font-size:38px; margin-bottom:6px; line-height:1; transition:transform .18s; }
+.file-item:hover .file-icon { transform:translateY(-2px); }
+.file-name {
+  font-size:11px; color:var(--text-primary); line-height:1.3;
+  word-break:break-all; max-width:90px;
+  overflow:hidden; display:-webkit-box;
+  -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  font-family: var(--font);
+}
+@keyframes itemIn { from{opacity:0;transform:scale(0.9) translateY(6px)} to{opacity:1;transform:none} }
+
+/* ── List View ── */
+#list-view { width:100%; border-collapse:collapse; }
+#list-view thead tr { border-bottom:1px solid var(--border); }
+#list-view thead th {
+  padding:5px 10px; font-size:11px; font-weight:600;
+  color:var(--text-muted); text-align:left; text-transform:uppercase;
+  letter-spacing:.4px; cursor:pointer; white-space:nowrap; transition:color .15s;
+  font-family: var(--font-en);
+}
+#list-view thead th:hover { color:var(--text-secondary); }
+#list-view thead th.sorted { color:var(--accent-text); }
+.sort-arrow { margin-left:4px; font-size:9px; opacity:.7; }
+.col-name{width:45%}.col-date{width:22%}.col-type{width:22%}.col-size{width:11%;text-align:right!important}
+#list-view tbody tr {
+  border-bottom:1px solid var(--border);
+  transition:background .12s; animation:rowIn .14s ease-out both; cursor:pointer;
+}
+#list-view tbody tr:hover { background:var(--bg-hover); }
+#list-view tbody tr.selected { background:var(--bg-selected); }
+#list-view tbody tr.selected td { color:var(--accent-text) !important; }
+@keyframes rowIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:none} }
+#list-view tbody td {
+  padding:5px 10px; font-size:12px; color:var(--text-primary);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:0;
+  font-family: var(--font);
+}
+.list-name-cell { display:flex; align-items:center; gap:8px; }
+.list-icon { font-size:16px; flex-shrink:0; }
+.list-name-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.list-date, .list-type { color:var(--text-secondary); font-size:11px; }
+.list-size { color:var(--text-secondary); font-size:11px; text-align:right; }
+
+/* ── Status Bar ── */
+#statusbar {
+  display:flex; align-items:center; gap:16px;
+  padding:4px 16px;
+  background:var(--bg-surface); border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-muted);
+  font-family: var(--font-en);
+  transition:background .25s;
+}
+
+/* ── Context Menu ── */
+#ctx-menu {
+  position:fixed; z-index:1000; min-width:180px;
+  background:var(--bg-card);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md); padding:4px;
+  box-shadow:var(--shadow-md); display:none;
+  animation:ctxIn .12s cubic-bezier(0.34,1.56,0.64,1);
+}
+#ctx-menu.visible { display:block; }
+@keyframes ctxIn { from{opacity:0;transform:scale(.92) translateY(-4px)} to{opacity:1;transform:none} }
+.ctx-item {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 10px; border-radius:var(--radius-sm);
+  font-size:12px; color:var(--text-primary); cursor:pointer;
+  transition:background .1s; font-family: var(--font);
+}
+.ctx-item:hover { background:var(--bg-hover); }
+.ctx-item.danger { color:var(--danger); }
+.ctx-item.danger:hover { background:var(--danger-bg); }
+.ctx-sep { height:1px; background:var(--border); margin:4px 6px; }
+
+/* ══════════════════════════════════════════════════════
+   MODAL SYSTEM
+   ══════════════════════════════════════════════════════ */
+.modal-overlay {
+  position:fixed; inset:0; z-index:2000;
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(5px);
+  display:none; align-items:center; justify-content:center;
+}
+.modal-overlay.visible { display:flex; }
+.modal-box {
+  background:var(--bg-surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:24px;
+  width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  animation:modalIn .22s cubic-bezier(0.34,1.56,0.64,1);
+  box-shadow:var(--shadow-lg);
+  transition:background .25s;
+}
+.modal-box.wide { max-width:560px; }
+@keyframes modalIn { from{opacity:0;transform:scale(.9)} to{opacity:1;transform:none} }
+.modal-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:18px;
+}
+.modal-title { font-size:15px; font-weight:700; font-family:var(--font); }
+.modal-close {
+  width:26px; height:26px; border-radius:6px;
+  background:var(--bg-card); border:1px solid var(--border);
+  color:var(--text-muted); cursor:pointer; font-size:12px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.modal-close:hover { color:var(--text-primary); border-color:var(--border-focus); }
+.modal-btns { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
+.modal-btn {
+  padding:7px 16px; border-radius:var(--radius-sm); border:none;
+  font-size:12px; cursor:pointer; transition:all .15s;
+  font-family:var(--font); font-weight:600;
+}
+.modal-btn.primary { background:var(--accent); color:#fff; }
+.modal-btn.primary:hover { background:var(--accent-hover); }
+.modal-btn.secondary { background:var(--bg-hover); color:var(--text-primary); border:1px solid var(--border); }
+.modal-btn.secondary:hover { background:var(--bg-card); }
+.modal-btn.danger { background:var(--danger-bg); color:var(--danger); border:1px solid rgba(248,81,73,0.2); }
+.modal-btn.danger:hover { background:var(--danger); color:#fff; }
+
+/* ── Tab inside modal ── */
+.modal-tabs {
+  display:flex; gap:2px; background:var(--bg-base);
+  border-radius:var(--radius-sm); padding:3px; margin-bottom:18px;
+}
+.modal-tab {
+  flex:1; padding:6px; text-align:center; border-radius:5px;
+  font-size:12px; cursor:pointer; color:var(--text-secondary);
+  transition:all .15s; border:none; background:transparent;
+  font-family:var(--font);
+}
+.modal-tab.active {
+  background:var(--bg-surface); color:var(--text-primary);
+  box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+
+/* ── Request item ── */
+.request-item {
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:12px; margin-bottom:8px;
+}
+.request-meta { font-size:11px; color:var(--text-secondary); margin-bottom:6px; font-family:var(--font-en); }
+.request-value { font-size:13px; color:var(--text-primary); margin-bottom:8px; font-family:var(--font-en); }
+.badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700;
+  font-family:var(--font-en); letter-spacing:.3px; text-transform:uppercase;
+}
+.badge-pending  { background:rgba(210,153,34,0.15);  color:var(--warning); }
+.badge-approved { background:var(--success-bg); color:var(--success); }
+.badge-rejected { background:var(--danger-bg);  color:var(--danger);  }
+
+/* ── User management table ── */
+.user-table { width:100%; border-collapse:collapse; }
+.user-table th {
+  padding:6px 10px; font-size:10px; color:var(--text-muted);
+  text-align:left; text-transform:uppercase; letter-spacing:.5px;
+  border-bottom:1px solid var(--border); font-family:var(--font-en);
+}
+.user-table td { padding:8px 10px; font-size:12px; border-bottom:1px solid var(--border); font-family:var(--font); }
+.user-avatar-sm {
+  width:26px; height:26px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#fff; margin-right:8px;
+  vertical-align:middle;
+}
+
+/* ── Toast ── */
+#toast {
+  position:fixed; bottom:40px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--bg-card); backdrop-filter:blur(16px);
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:8px 16px; font-size:12px; color:var(--text-primary);
+  opacity:0; transition:all .25s; pointer-events:none; z-index:9999;
+  font-family:var(--font);
+}
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.error { border-color:rgba(248,81,73,0.4); color:var(--danger); }
+#toast.success { border-color:rgba(63,185,80,0.4); color:var(--success); }
+
+/* ── Empty State ── */
+.empty-state {
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  height:200px; color:var(--text-muted); font-size:13px; gap:8px;
+  font-family:var(--font);
+}
+.empty-state .es-icon { font-size:40px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.18); }
+
+/* ── Lang switch ── */
+.lang-btn {
+  display:flex; align-items:center; gap:4px;
+  padding:3px 9px; border-radius:var(--radius-sm);
+  background:var(--bg-card); border:1px solid var(--border);
+  color:var(--text-secondary); font-size:11px; cursor:pointer;
+  font-weight:600; letter-spacing:.5px; transition:all .15s;
+  font-family:var(--font-en);
+}
+.lang-btn:hover { border-color:var(--border-focus); color:var(--text-primary); }
+
+/* ── Notification dot ── */
+.notif-dot {
+  position:absolute; top:2px; right:2px;
+  width:7px; height:7px; background:var(--danger); border-radius:50%;
+  border:2px solid var(--bg-surface);
+}
+.relative { position:relative; }
+
+/* ── Profile panel ── */
+.profile-panel {
+  position:fixed; top:40px; right:12px; z-index:500;
+  background:var(--bg-surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg); padding:16px; width:240px;
+  box-shadow:var(--shadow-md);
+  animation:ctxIn .15s ease-out;
+  display:none;
+}
+.profile-panel.visible { display:block; }
+.profile-avatar-lg {
+  width:52px; height:52px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; font-weight:700; color:#fff;
+  margin:0 auto 10px;
+}
+.profile-name {
+  text-align:center; font-size:14px; font-weight:700; margin-bottom:2px;
+  font-family:var(--font);
+}
+.profile-role {
+  text-align:center; font-size:11px; color:var(--text-muted);
+  font-family:var(--font-en); margin-bottom:14px;
+}
+.profile-divider { height:1px; background:var(--border); margin:10px 0; }
+.profile-action {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 8px; border-radius:var(--radius-sm);
+  font-size:12px; color:var(--text-secondary); cursor:pointer;
+  transition:all .15s; font-family:var(--font);
+}
+.profile-action:hover { background:var(--bg-hover); color:var(--text-primary); }
+.profile-action.danger { color:var(--danger); }
+.profile-action.danger:hover { background:var(--danger-bg); }
+
+/* ── Separator ── */
+.sep { height:1px; background:var(--border); margin:8px 0; }
+
+/* ── Switch ── */
+.switch-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+.switch { position:relative; width:36px; height:20px; }
+.switch input { opacity:0; width:0; height:0; }
+.switch-slider {
+  position:absolute; inset:0; background:var(--bg-card); border:1px solid var(--border);
+  border-radius:20px; cursor:pointer; transition:.25s;
+}
+.switch-slider::before {
+  content:''; position:absolute; width:14px; height:14px;
+  left:2px; top:2px; background:var(--text-muted); border-radius:50%;
+  transition:.25s;
+}
+.switch input:checked + .switch-slider { background:var(--accent); border-color:var(--accent); }
+.switch input:checked + .switch-slider::before { transform:translateX(16px); background:#fff; }
+
+/* ══════════════════════════════════════════════════════
+   SETUP / ERROR PANEL (fixes "Failed to fetch")
+   ══════════════════════════════════════════════════════ */
+#setup-panel {
+  display:none; flex-direction:column; gap:0;
+  background:var(--bg-surface); border:1px solid var(--border);
+  border-radius:var(--radius-md); margin-bottom:14px;
+  overflow:hidden;
+}
+#setup-panel.visible { display:flex; }
+.setup-header {
+  display:flex; align-items:center; gap:8px;
+  padding:10px 14px;
+  background:rgba(210,153,34,0.12); border-bottom:1px solid var(--border);
+  font-size:12px; font-weight:600; color:var(--warning);
+}
+.setup-body { padding:12px 14px; font-size:11px; color:var(--text-secondary); line-height:1.7; }
+.setup-body code {
+  display:block; background:rgba(0,0,0,0.3); border:1px solid var(--border);
+  border-radius:4px; padding:6px 10px; font-family:monospace;
+  color:#79c0ff; margin:4px 0; font-size:11px; user-select:text;
+}
+.setup-btns { display:flex; gap:8px; padding:0 14px 12px; flex-wrap:wrap; }
+.setup-btn {
+  padding:5px 12px; border-radius:6px; border:none; font-size:11px;
+  cursor:pointer; transition:all .15s; font-family:var(--font); font-weight:600;
+}
+.setup-btn.seed  { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
+.setup-btn.seed:hover  { background:rgba(63,185,80,0.25); }
+.setup-btn.retry { background:rgba(31,111,235,0.15); color:var(--accent-text); border:1px solid rgba(31,111,235,0.3); }
+.setup-btn.retry:hover { background:rgba(31,111,235,0.25); }
+.setup-step { display:flex; align-items:flex-start; gap:6px; margin:2px 0; }
+.setup-step-num {
+  min-width:16px; height:16px; border-radius:50%;
+  background:var(--accent); color:#fff;
+  font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  margin-top:1px; flex-shrink:0;
+}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     LOGIN SCREEN
+     ════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-bg-grid"></div>
+  <div class="login-glow"></div>
+
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">📁</div>
+      <div class="login-title" id="l-title">File Explorer Pro</div>
+      <div class="login-sub" id="l-sub">Sign in to access your drive</div>
+    </div>
+
+    <!-- Language toggle on login -->
+    <div style="display:flex;justify-content:center;gap:6px;margin-bottom:16px">
+      <button class="lang-btn active" id="login-lang-en" onclick="setLangLogin('en')">EN</button>
+      <button class="lang-btn" id="login-lang-kh" onclick="setLangLogin('kh')">ខ្មែរ</button>
+    </div>
+
+    <!-- Error box -->
+    <div class="login-err" id="login-err"></div>
+
+    <!-- Setup/fix panel (shown when server is unreachable) -->
+    <div id="setup-panel">
+      <div class="setup-header">⚠️ &nbsp;Server not reachable — follow steps below</div>
+      <div class="setup-body">
+        <div class="setup-step"><div class="setup-step-num">1</div><div>Open terminal in your project folder</div></div>
+        <code>npm install</code>
+        <div class="setup-step"><div class="setup-step-num">2</div><div>Copy <b>.env.example</b> → <b>.env</b> and fill MongoDB URI</div></div>
+        <code>cp .env.example .env</code>
+        <div class="setup-step"><div class="setup-step-num">3</div><div>Start the backend server</div></div>
+        <code>node server.js</code>
+        <div class="setup-step"><div class="setup-step-num">4</div><div>Seed demo accounts (first time only)</div></div>
+      </div>
+      <div class="setup-btns">
+        <button class="setup-btn seed"  onclick="doSeed()">🌱 Seed Database</button>
+        <button class="setup-btn retry" onclick="retryConnection()">🔄 Retry Connection</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" id="l-username">Username</label>
+      <input class="form-input" type="text" id="input-username" placeholder="admin" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" id="l-password">Password</label>
+      <div style="position:relative">
+        <input class="form-input" type="password" id="input-password" placeholder="••••••••" autocomplete="current-password" style="padding-right:40px"/>
+        <button onclick="togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-secondary)" title="Show/Hide password">👁</button>
+      </div>
+    </div>
+    <button class="btn-primary" id="btn-login" style="display:flex;align-items:center;justify-content:center;gap:8px">
+      <div id="login-spinner" style="display:none;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></div>
+      <span id="l-signin">Sign In →</span>
+    </button>
+    <div class="login-footer">
+      <span id="l-demo">Demo: admin / admin123 &nbsp;|&nbsp; demo / demo123</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     APP SHELL
+     ════════════════════════════════════════════════════════ -->
+<div id="app" class="hidden">
+
+  <!-- Title Bar -->
+  <div id="titlebar">
+    <button class="win-btn close"></button>
+    <button class="win-btn min"></button>
+    <button class="win-btn max"></button>
+    <span class="title" style="padding-left:8px;" id="tb-title">📁 File Explorer Pro</span>
+
+    <div class="titlebar-right">
+      <!-- Language -->
+      <button class="lang-btn" id="lang-toggle" onclick="toggleLang()" style="font-size:11px"></button>
+
+      <!-- Dark/Light toggle -->
+      <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+
+      <!-- Notifications (admin: edit requests) -->
+      <div class="relative">
+        <button class="icon-btn" id="btn-notif" onclick="openModal('requests')" title="Edit Requests">🔔</button>
+        <div class="notif-dot" id="notif-dot" style="display:none"></div>
+      </div>
+
+      <!-- Profile chip -->
+      <div class="user-chip" id="user-chip" onclick="toggleProfile()">
+        <div class="user-chip-avatar" id="chip-avatar"></div>
+        <div>
+          <div class="user-chip-name" id="chip-name"></div>
+          <div class="user-chip-role" id="chip-role"></div>
+        </div>
+      </div>
+
+      <!-- API status -->
+      <span style="font-size:10px;color:var(--text-muted)">
+        <span id="api-status">connecting…</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Loading Bar -->
+  <div id="loading-bar"></div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button class="tb-btn" id="btn-back"    title="Back" disabled>←</button>
+    <button class="tb-btn" id="btn-forward" title="Forward" disabled>→</button>
+    <button class="tb-btn" id="btn-up"      title="Up">↑</button>
+    <button class="tb-btn" id="btn-refresh" title="Refresh">↺</button>
+    <div id="addressbar"></div>
+    <div id="searchbar">
+      <span style="color:var(--text-muted);font-size:12px;">🔍</span>
+      <input type="text" id="search-input" placeholder="Search"/>
+    </div>
+    <button id="btn-upload" title="Upload file">⬆ <span data-t="upload">Upload</span></button>
+    <input type="file" id="file-upload-input" multiple/>
+    <button class="tb-btn" id="btn-new-folder" title="New Folder" style="font-size:11px;width:auto;padding:0 8px;">
+      + <span data-t="folder">Folder</span>
+    </button>
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-view-grid" title="Grid">⊞</button>
+      <button class="view-btn"        id="btn-view-list" title="List">≡</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-header" data-t="quickAccess">Quick Access</div>
+        <div class="sidebar-item" id="nav-root" onclick="navigateTo(currentUser.rootFolderId)">
+          <span class="sidebar-icon">🏠</span> <span data-t="home">Home</span>
+        </div>
+        <!-- dynamic personal folders injected here -->
+        <div id="sidebar-personal"></div>
+      </div>
+      <div class="sidebar-section" id="admin-sidebar-section" style="display:none">
+        <div class="sidebar-header" data-t="adminTools">Admin</div>
+        <div class="sidebar-item" onclick="openModal('users')">
+          <span class="sidebar-icon">👥</span> <span data-t="manageUsers">Manage Users</span>
+        </div>
+        <div class="sidebar-item" onclick="openModal('requests')">
+          <span class="sidebar-icon">📬</span> <span data-t="editRequests">Edit Requests</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div id="content">
+      <div id="file-grid"></div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="statusbar">
+    <span id="status-count">0 items</span>
+    <span id="status-selected"></span>
+    <span style="margin-left:auto" id="status-user"></span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     PROFILE PANEL (dropdown)
+     ════════════════════════════════════════════════════════ -->
+<div class="profile-panel" id="profile-panel">
+  <div class="profile-avatar-lg" id="pp-avatar"></div>
+  <div class="profile-name" id="pp-name"></div>
+  <div class="profile-role" id="pp-role"></div>
+
+  <div class="profile-divider"></div>
+
+  <!-- Theme toggle inside panel -->
+  <div class="switch-row" style="padding:0 4px">
+    <span style="font-size:12px;color:var(--text-secondary)">🌙 <span data-t="darkMode">Dark Mode</span></span>
+    <label class="switch">
+      <input type="checkbox" id="theme-switch" onchange="toggleTheme()"/>
+      <span class="switch-slider"></span>
+    </label>
+  </div>
+  <!-- Lang toggle inside panel -->
+  <div class="switch-row" style="padding:0 4px;margin-top:2px">
+    <span style="font-size:12px;color:var(--text-secondary)">🌐 ភាសាខ្មែរ</span>
+    <label class="switch">
+      <input type="checkbox" id="lang-switch" onchange="toggleLang()"/>
+      <span class="switch-slider"></span>
+    </label>
+  </div>
+
+  <div class="profile-divider"></div>
+
+  <div class="profile-action" onclick="openModal('editProfile'); closeProfile()">
+    ✏️ <span data-t="editProfile">Edit Profile</span>
+  </div>
+  <div class="profile-action" onclick="openModal('requestChange'); closeProfile()">
+    📬 <span data-t="requestChange">Request Username/Password Change</span>
+  </div>
+  <div class="profile-action" onclick="openModal('myRequests'); closeProfile()">
+    📋 <span data-t="myRequests">My Requests</span>
+  </div>
+  <div class="profile-divider"></div>
+  <div class="profile-action danger" onclick="logout()">
+    ⏻ <span data-t="signOut">Sign Out</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     CONTEXT MENU
+     ════════════════════════════════════════════════════════ -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-open">📂 <span data-t="open">Open</span></div>
+  <div class="ctx-item" id="ctx-download">⬇️ <span data-t="download">Download</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" id="ctx-rename">✏️ <span data-t="rename">Rename</span></div>
+  <div class="ctx-item" id="ctx-new-folder-ctx">📁 <span data-t="newFolder">New Folder</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" id="ctx-delete">🗑️ <span data-t="delete">Delete</span></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     MODALS
+     ════════════════════════════════════════════════════════ -->
+
+<!-- Generic rename / new folder modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">New Folder</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <input class="form-input" type="text" id="modal-input" placeholder="Enter name…"/>
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeModal()" data-t="cancel">Cancel</button>
+      <button class="modal-btn primary"   id="btn-confirm"      data-t="create">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Profile modal -->
+<div class="modal-overlay" id="modal-edit-profile">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" data-t="editProfile">Edit Profile</div>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label" data-t="displayName">Display Name</label>
+      <input class="form-input" id="ep-displayname" type="text"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" data-t="avatarEmoji">Avatar Emoji</label>
+      <input class="form-input" id="ep-avatar" type="text" maxlength="2" placeholder="😎"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" data-t="avatarColor">Avatar Color</label>
+      <input class="form-input" id="ep-color" type="color" style="height:38px;padding:4px 8px;cursor:pointer"/>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeAllModals()" data-t="cancel">Cancel</button>
+      <button class="modal-btn primary" onclick="saveProfile()" data-t="save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Request Change modal (user sends to admin) -->
+<div class="modal-overlay" id="modal-request-change">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" data-t="requestChange">Request Change</div>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px" data-t="requestChangeNote">
+      Your request will be sent to Administrator for approval.
+    </p>
+    <div class="form-group">
+      <label class="form-label" data-t="changeType">What to change?</label>
+      <select class="form-input" id="req-type" onchange="updateReqFields()">
+        <option value="change_username">Username</option>
+        <option value="change_password">Password</option>
+        <option value="change_displayname">Display Name</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" id="req-value-label">New Value</label>
+      <input class="form-input" id="req-value" type="text" placeholder="New username…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" data-t="reason">Reason (optional)</label>
+      <input class="form-input" id="req-reason" type="text" placeholder="Why?"/>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeAllModals()" data-t="cancel">Cancel</button>
+      <button class="modal-btn primary" onclick="submitRequest()" data-t="sendRequest">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- My Requests modal -->
+<div class="modal-overlay" id="modal-my-requests">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <div class="modal-title" data-t="myRequests">My Requests</div>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div id="my-requests-list"></div>
+  </div>
+</div>
+
+<!-- Admin: Edit Requests modal -->
+<div class="modal-overlay" id="modal-requests">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <div class="modal-title" data-t="pendingRequests">Pending Edit Requests</div>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div id="requests-list"></div>
+  </div>
+</div>
+
+<!-- Admin: Manage Users modal -->
+<div class="modal-overlay" id="modal-users">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <div class="modal-title" data-t="manageUsers">Manage Users</div>
+      <div style="display:flex;gap:8px">
+        <button class="modal-btn primary" style="padding:5px 12px" onclick="openModal('createUser')" data-t="addUser">+ Add User</button>
+        <button class="modal-close" onclick="closeAllModals()">✕</button>
+      </div>
+    </div>
+    <div id="users-list"></div>
+  </div>
+</div>
+
+<!-- Admin: Create User modal -->
+<div class="modal-overlay" id="modal-create-user">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" data-t="createUser">Create New User</div>
+      <button class="modal-close" onclick="closeAllModals()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input class="form-input" id="cu-username" type="text" placeholder="john_doe"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Display Name</label>
+      <input class="form-input" id="cu-displayname" type="text" placeholder="John Doe"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" id="cu-password" type="password" placeholder="••••••••"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Role</label>
+      <select class="form-input" id="cu-role">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeAllModals()" data-t="cancel">Cancel</button>
+      <button class="modal-btn primary" onclick="createUser()" data-t="create">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// Dynamic API base URL - automatically switches between dev and production
+const BASE_URL = (() => {
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1';
+  if (isLocalhost) {
+    return 'http://localhost:5000/api';
+  }
+  // In production, use the same domain as the frontend
+  return `${window.location.protocol}//${window.location.host}/api`;
+})();
+
+// ════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════
+let token       = localStorage.getItem('fe_token') || null;
+let currentUser = JSON.parse(localStorage.getItem('fe_user') || 'null');
+let currentPath   = null;
+let historyStack  = [];
+let historyIndex  = 0;
+let selectedItem  = null;
+let ctxTargetItem = null;
+let modalMode     = null;
+let viewMode      = 'grid';
+let sortCol       = 'name';
+let sortDir       = 1;
+let currentItems  = [];
+let pendingCount  = 0;
+
+// ════════════════════════════════════════════════════════
+//  TRANSLATIONS  (Points #7)
+// ════════════════════════════════════════════════════════
+const T = {
+  en: {
+    title:'File Explorer Pro',
+    'sub':'Sign in to access your drive',
+    'username':'Username', 'password':'Password', 'signin':'Sign In →',
+    'demo':'Demo: admin / admin123 | demo / demo123',
+    'quickAccess':'Quick Access', 'home':'Home', 'adminTools':'Admin',
+    'manageUsers':'Manage Users', 'editRequests':'Edit Requests',
+    'upload':'Upload', 'folder':'Folder', 'newFolder':'New Folder',
+    'open':'Open', 'download':'Download', 'rename':'Rename', 'delete':'Delete',
+    'darkMode':'Dark Mode', 'editProfile':'Edit Profile',
+    'requestChange':'Request Change', 'myRequests':'My Requests',
+    'signOut':'Sign Out', 'displayName':'Display Name',
+    'avatarEmoji':'Avatar Emoji', 'avatarColor':'Avatar Color',
+    'save':'Save', 'cancel':'Cancel', 'create':'Create',
+    'changeType':'What to change?', 'reason':'Reason (optional)',
+    'sendRequest':'Send Request',
+    'requestChangeNote':'Your request will be sent to Administrator for approval.',
+    'pendingRequests':'Pending Edit Requests',
+    'createUser':'Create New User', 'addUser':'+ Add User',
+    'approved':'Approved', 'rejected':'Rejected', 'pending':'Pending',
+    'approve':'Approve', 'reject':'Reject',
+    'noRequests':'No pending requests.',
+    'noUsers':'No users found.',
+  },
+  kh: {
+    title:'ប្រព័ន្ធឯកសារ Pro',
+    'sub':'ចូលដើម្បីប្រើប្រាស់ Drive របស់អ្នក',
+    'username':'ឈ្មោះអ្នកប្រើ', 'password':'ពាក្យសម្ងាត់', 'signin':'ចូល →',
+    'demo':'សាកល្បង: admin / admin123 | demo / demo123',
+    'quickAccess':'ចូលរហ័ស', 'home':'ផ្ទះ', 'adminTools':'ផ្នែកគ្រប់គ្រង',
+    'manageUsers':'គ្រប់គ្រងអ្នកប្រើ', 'editRequests':'សំណើកែប្រែ',
+    'upload':'ផ្ទុកឡើង', 'folder':'ថត', 'newFolder':'ថតថ្មី',
+    'open':'បើក', 'download':'ទាញយក', 'rename':'ប្ដូរឈ្មោះ', 'delete':'លុប',
+    'darkMode':'របៀបងងឹត', 'editProfile':'កែប្រែប្រវត្តិរូប',
+    'requestChange':'ស្នើបំប្លែង Username/Password', 'myRequests':'សំណើរបស់ខ្ញុំ',
+    'signOut':'ចាកចេញ', 'displayName':'ឈ្មោះបង្ហាញ',
+    'avatarEmoji':'រូបតំណាង Emoji', 'avatarColor':'ពណ៌រូបតំណាង',
+    'save':'រក្សាទុក', 'cancel':'បោះបង់', 'create':'បង្កើត',
+    'changeType':'ចង់ប្ដូរអ្វី?', 'reason':'មូលហេតុ (ស្រេចចិត្ត)',
+    'sendRequest':'ផ្ញើសំណើ',
+    'requestChangeNote':'សំណើរបស់អ្នកនឹងត្រូវផ្ញើទៅ Administrator ដើម្បីអនុម័ត។',
+    'pendingRequests':'សំណើកែប្រែរង់ចាំ',
+    'createUser':'បង្កើតអ្នកប្រើថ្មី', 'addUser':'+ បន្ថែមអ្នកប្រើ',
+    'approved':'បានអនុម័ត', 'rejected':'បានបដិសេធ', 'pending':'រង់ចាំ',
+    'approve':'អនុម័ត', 'reject':'បដិសេធ',
+    'noRequests':'គ្មានសំណើរង់ចាំ។',
+    'noUsers':'រកមិនឃើញអ្នកប្រើ។',
+  }
+};
+
+function t(key) {
+  const lang = currentUser?.language || localStorage.getItem('fe_lang') || 'en';
+  return T[lang]?.[key] || T.en[key] || key;
+}
+
+function applyLang() {
+  const lang = currentUser?.language || localStorage.getItem('fe_lang') || 'en';
+  document.documentElement.setAttribute('data-lang', lang);
+  document.querySelectorAll('[data-t]').forEach(el => {
+    el.textContent = t(el.dataset.t);
+  });
+  // Login screen specific
+  const lSub = document.getElementById('l-sub');
+  if (lSub) lSub.textContent = t('sub');
+  const lTitle = document.getElementById('l-title');
+  if (lTitle) lTitle.textContent = t('title');
+  ['username','password','signin','demo'].forEach(k => {
+    const el = document.getElementById('l-' + k);
+    if (el) el.textContent = t(k);
+  });
+  // Lang toggle button
+  const lb = document.getElementById('lang-toggle');
+  if (lb) lb.textContent = lang === 'en' ? 'ខ្មែរ' : 'EN';
+  const ls = document.getElementById('lang-switch');
+  if (ls) ls.checked = lang === 'kh';
+  const loginLangEn = document.getElementById('login-lang-en');
+  const loginLangKh = document.getElementById('login-lang-kh');
+  if (loginLangEn) loginLangEn.style.borderColor = lang === 'en' ? 'var(--border-focus)' : '';
+  if (loginLangKh) loginLangKh.style.borderColor = lang === 'kh' ? 'var(--border-focus)' : '';
+}
+
+function setLangLogin(lang) {
+  localStorage.setItem('fe_lang', lang);
+  applyLang();
+}
+
+function toggleLang() {
+  const lang = (currentUser?.language || localStorage.getItem('fe_lang') || 'en') === 'en' ? 'kh' : 'en';
+  localStorage.setItem('fe_lang', lang);
+  if (currentUser) {
+    currentUser.language = lang;
+    localStorage.setItem('fe_user', JSON.stringify(currentUser));
+    API.patchPreferences({ language: lang }).catch(() => {});
+  }
+  applyLang();
+}
+
+// ════════════════════════════════════════════════════════
+//  THEME  (Point #8)
+// ════════════════════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  const sw  = document.getElementById('theme-switch');
+  if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+  if (sw)  sw.checked = theme === 'light';
+}
+
+function toggleTheme() {
+  const cur = currentUser?.theme || localStorage.getItem('fe_theme') || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('fe_theme', next);
+  if (currentUser) {
+    currentUser.theme = next;
+    localStorage.setItem('fe_user', JSON.stringify(currentUser));
+    API.patchPreferences({ theme: next }).catch(() => {});
+  }
+  applyTheme(next);
+}
+
+// ════════════════════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ════════════════════════════════════════════════════════
+//  LOADING
+// ════════════════════════════════════════════════════════
+function setLoading(v) {
+  document.getElementById('loading-bar').classList.toggle('active', v);
+}
+
+// ════════════════════════════════════════════════════════
+//  API LAYER
+// ════════════════════════════════════════════════════════
+const API = {
+  headers() {
+    return { 'Content-Type':'application/json', ...(token ? { Authorization:`Bearer ${token}` } : {}) };
+  },
+  async request(method, url, body) {
+    const opts = { method, headers: this.headers() };
+    if (body) opts.body = JSON.stringify(body);
+    const res  = await fetch(BASE_URL + url, opts);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Request failed');
+    return data;
+  },
+
+  // Auth
+  login: (username, password) => API.request('POST','/auth/login',{username,password}),
+  getMe: () => API.request('GET','/auth/me'),
+  patchPreferences: (upd) => API.request('PATCH','/auth/preferences',upd),
+
+  // Files
+  getFolderContent: (id) => API.request('GET',`/folders/${id}`).then(d=>d.data),
+  createFolder: (parentId,name) => API.request('POST','/folders',{parentId,name}),
+  renameItem: (id,name) => API.request('PATCH',`/items/${id}`,{name}),
+  deleteItem: (id) => API.request('DELETE',`/items/${id}`),
+  getDownloadUrl: (id) => API.request('GET',`/files/${id}/download`).then(d=>d.url),
+  getParent: (id) => API.request('GET',`/items/${id}`).then(d=>d.data),
+
+  async uploadFile(parentId, file) {
+    const form = new FormData();
+    form.append('file', file); form.append('parentId', parentId);
+    const res  = await fetch(BASE_URL + '/files/upload', {
+      method:'POST', headers:{ ...(token ? { Authorization:`Bearer ${token}` } : {}) }, body:form,
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+  },
+
+  // Users (admin)
+  getUsers:   () => API.request('GET','/users').then(d=>d.data),
+  createUser: (body) => API.request('POST','/auth/register',body),
+  updateUser: (id,body) => API.request('PATCH',`/users/${id}`,body),
+  deleteUser: (id) => API.request('DELETE',`/users/${id}`),
+
+  // Edit requests
+  getRequests:   () => API.request('GET','/requests').then(d=>d.data),
+  getMyRequests: () => API.request('GET','/requests/my').then(d=>d.data),
+  submitRequest: (body) => API.request('POST','/requests',body),
+  reviewRequest: (id,body) => API.request('PATCH',`/requests/${id}`,body),
+
+  // Seed
+  seed: () => fetch(BASE_URL+'/seed',{method:'POST'}).then(r=>r.json()),
+};
+
+// ════════════════════════════════════════════════════════
+//  LOGIN
+// ════════════════════════════════════════════════════════
+function togglePw() {
+  const inp = document.getElementById('input-password');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function doSeed() {
+  const panel = document.getElementById('setup-panel');
+  try {
+    const r = await API.seed();
+    if (r.success || r.message) {
+      panel.querySelector('.setup-body').insertAdjacentHTML('beforeend',
+        '<div style="color:var(--success);font-weight:600;margin-top:6px">✅ ' + (r.message||'Seeded!') + '</div>');
+    }
+  } catch(e) {
+    panel.querySelector('.setup-body').insertAdjacentHTML('beforeend',
+      '<div style="color:var(--danger);margin-top:6px">❌ Seed failed: ' + e.message + '</div>');
+  }
+}
+
+async function retryConnection() {
+  const errEl  = document.getElementById('login-err');
+  const panel  = document.getElementById('setup-panel');
+  errEl.style.display = 'none';
+  panel.classList.remove('visible');
+  try {
+    const r = await fetch(BASE_URL + '/health');
+    const d = await r.json();
+    if (d.status === 'ok') {
+      errEl.style.display='block';
+      errEl.style.background='rgba(63,185,80,.12)';
+      errEl.style.color='var(--success)';
+      errEl.textContent = '🟢 Server is online! You can log in now.';
+    }
+  } catch {
+    panel.classList.add('visible');
+    errEl.textContent = 'Still unreachable. Is server.js running?';
+    errEl.style.display = 'block';
+  }
+}
+
+async function doLogin() {
+  const username = document.getElementById('input-username').value.trim();
+  const password = document.getElementById('input-password').value;
+  const errEl    = document.getElementById('login-err');
+  const panel    = document.getElementById('setup-panel');
+  const btn      = document.getElementById('btn-login');
+  const spinner  = document.getElementById('login-spinner');
+  const btnTxt   = document.getElementById('l-signin');
+
+  errEl.style.display = 'none';
+  errEl.style.background = '';
+  errEl.style.color = '';
+  panel.classList.remove('visible');
+
+  if (!username || !password) {
+    errEl.textContent = 'Please enter username and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // Show loading spinner
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  btnTxt.textContent = 'Signing in…';
+
+  try {
+    const data = await API.login(username, password);
+    token = data.token;
+    currentUser = data.data;
+    localStorage.setItem('fe_token', token);
+    localStorage.setItem('fe_user', JSON.stringify(currentUser));
+    bootApp();
+  } catch(err) {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnTxt.textContent = 'Sign In →';
+
+    if (err.message === 'Failed to fetch' || err.message.includes('fetch')) {
+      // Server not running → show setup guide
+      panel.classList.add('visible');
+      errEl.textContent = '❌ Cannot connect to server (localhost:5000). See setup guide below.';
+      errEl.style.display = 'block';
+    } else {
+      errEl.textContent = '❌ ' + err.message;
+      errEl.style.display = 'block';
+    }
+  }
+}
+
+function logout() {
+  token = null; currentUser = null;
+  localStorage.removeItem('fe_token');
+  localStorage.removeItem('fe_user');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('profile-panel').classList.remove('visible');
+  closeAllModals();
+}
+
+// ════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════
+async function bootApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.remove('hidden');
+
+  // Apply saved theme & lang
+  applyTheme(currentUser.theme || localStorage.getItem('fe_theme') || 'dark');
+  applyLang();
+
+  // Update UI
+  updateUserChip();
+
+  // Admin: show extra sidebar + request count
+  if (currentUser.role === 'admin') {
+    document.getElementById('admin-sidebar-section').style.display = '';
+    checkPendingRequests();
+  }
+
+  // Status bar
+  document.getElementById('status-user').textContent =
+    `👤 ${currentUser.displayName || currentUser.username} (${currentUser.role})`;
+
+  // Navigate to user's root
+  currentPath = currentUser.rootFolderId;
+  historyStack = [currentPath];
+  historyIndex = 0;
+
+  // Build sidebar personal folders
+  const items = await API.getFolderContent(currentPath).catch(() => []);
+  const folders = items.filter(i => i.type === 'folder');
+  const pIcons = { Desktop:'🖥️', Documents:'📄', Downloads:'⬇️', Pictures:'🖼️' };
+  document.getElementById('sidebar-personal').innerHTML = folders.map(f => `
+    <div class="sidebar-item" id="snav-${f._id}" onclick="navigateTo('${f._id}')">
+      <span class="sidebar-icon">${pIcons[f.name] || '📁'}</span>
+      <span>${f.name}</span>
+    </div>
+  `).join('');
+
+  await render();
+
+  // API health
+  try {
+    const r = await fetch(BASE_URL + '/health');
+    const d = await r.json();
+    document.getElementById('api-status').textContent =
+      d.mongo === 'connected' ? '🟢' : '🟡';
+  } catch { document.getElementById('api-status').textContent = '🔴'; }
+}
+
+function updateUserChip() {
+  const avatar = currentUser.avatar || (currentUser.displayName || currentUser.username).slice(0,2).toUpperCase();
+  const color  = currentUser.avatarColor || '#1f6feb';
+  document.getElementById('chip-avatar').textContent = avatar;
+  document.getElementById('chip-avatar').style.background = color;
+  document.getElementById('chip-name').textContent = currentUser.displayName || currentUser.username;
+  document.getElementById('chip-role').textContent = currentUser.role;
+  document.getElementById('pp-avatar').textContent = avatar;
+  document.getElementById('pp-avatar').style.background = color;
+  document.getElementById('pp-name').textContent  = currentUser.displayName || currentUser.username;
+  document.getElementById('pp-role').textContent  = currentUser.role;
+}
+
+async function checkPendingRequests() {
+  try {
+    const reqs = await API.getRequests();
+    pendingCount = reqs.length;
+    document.getElementById('notif-dot').style.display = pendingCount > 0 ? '' : 'none';
+  } catch {}
+}
+
+// ════════════════════════════════════════════════════════
+//  PROFILE PANEL
+// ════════════════════════════════════════════════════════
+function toggleProfile() {
+  document.getElementById('profile-panel').classList.toggle('visible');
+}
+function closeProfile() {
+  document.getElementById('profile-panel').classList.remove('visible');
+}
+
+// ════════════════════════════════════════════════════════
+//  MODAL SYSTEM
+// ════════════════════════════════════════════════════════
+function closeAllModals() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('visible'));
+  modalMode = null;
+}
+
+function openModal(type, defaultVal = '') {
+  closeAllModals();
+  switch(type) {
+    case 'newFolder':
+    case 'rename':
+      modalMode = type;
+      document.getElementById('modal-title').textContent = type === 'rename' ? t('rename') : t('newFolder');
+      document.getElementById('modal-input').value = defaultVal;
+      document.getElementById('btn-confirm').textContent = type === 'rename' ? t('rename') : t('create');
+      document.getElementById('modal-overlay').classList.add('visible');
+      setTimeout(() => document.getElementById('modal-input').focus(), 50);
+      break;
+
+    case 'editProfile':
+      document.getElementById('ep-displayname').value = currentUser.displayName || '';
+      document.getElementById('ep-avatar').value = currentUser.avatar || '';
+      document.getElementById('ep-color').value = currentUser.avatarColor || '#1f6feb';
+      document.getElementById('modal-edit-profile').classList.add('visible');
+      break;
+
+    case 'requestChange':
+      updateReqFields();
+      document.getElementById('modal-request-change').classList.add('visible');
+      break;
+
+    case 'myRequests':
+      loadMyRequests();
+      document.getElementById('modal-my-requests').classList.add('visible');
+      break;
+
+    case 'requests':
+      if (currentUser.role !== 'admin') return;
+      loadAdminRequests();
+      document.getElementById('modal-requests').classList.add('visible');
+      break;
+
+    case 'users':
+      if (currentUser.role !== 'admin') return;
+      loadUsers();
+      document.getElementById('modal-users').classList.add('visible');
+      break;
+
+    case 'createUser':
+      document.getElementById('modal-create-user').classList.add('visible');
+      break;
+  }
+}
+
+function closeModal() { closeAllModals(); }
+
+async function confirmModal() {
+  const val = document.getElementById('modal-input').value.trim();
+  if (!val) return;
+  try {
+    if (modalMode === 'newFolder') {
+      await API.createFolder(currentPath, val);
+      showToast(t('newFolder') + ' "' + val + '" created', 'success');
+    } else if (modalMode === 'rename' && ctxTargetItem) {
+      await API.renameItem(ctxTargetItem._id, val);
+      showToast('Renamed to "' + val + '"', 'success');
+    }
+    closeModal();
+    await render();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ── Edit Profile ──
+async function saveProfile() {
+  const displayName = document.getElementById('ep-displayname').value.trim();
+  const avatar      = document.getElementById('ep-avatar').value.trim();
+  const avatarColor = document.getElementById('ep-color').value;
+  try {
+    await API.patchPreferences({ displayName, avatar, avatarColor });
+    Object.assign(currentUser, { displayName, avatar, avatarColor });
+    localStorage.setItem('fe_user', JSON.stringify(currentUser));
+    updateUserChip();
+    closeAllModals();
+    showToast('Profile updated!', 'success');
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ── Request Change ──
+function updateReqFields() {
+  const type = document.getElementById('req-type').value;
+  const label = document.getElementById('req-value-label');
+  const input = document.getElementById('req-value');
+  if (type === 'change_password') {
+    label.textContent = t('password');
+    input.type = 'password'; input.placeholder = '••••••••';
+  } else if (type === 'change_username') {
+    label.textContent = t('username');
+    input.type = 'text'; input.placeholder = 'New username…';
+  } else {
+    label.textContent = t('displayName');
+    input.type = 'text'; input.placeholder = 'New display name…';
+  }
+}
+
+async function submitRequest() {
+  const requestType = document.getElementById('req-type').value;
+  const newValue    = document.getElementById('req-value').value.trim();
+  const reason      = document.getElementById('req-reason').value.trim();
+  if (!newValue) { showToast('Please enter a value', 'error'); return; }
+  try {
+    await API.submitRequest({ requestType, newValue, reason });
+    closeAllModals();
+    showToast('Request sent to Administrator!', 'success');
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ── My Requests ──
+async function loadMyRequests() {
+  const el = document.getElementById('my-requests-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading…</div>';
+  try {
+    const reqs = await API.getMyRequests();
+    if (!reqs.length) { el.innerHTML = `<div class="empty-state" style="height:100px"><div>${t('noRequests')}</div></div>`; return; }
+    el.innerHTML = reqs.map(r => `
+      <div class="request-item">
+        <div class="request-meta">${r.requestType.replace('change_','').toUpperCase()} · ${new Date(r.createdAt).toLocaleDateString()}</div>
+        <div class="request-value">${r.requestType === 'change_password' ? '••••••••' : r.newValue}</div>
+        ${r.reason ? `<div class="request-meta">Reason: ${r.reason}</div>` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="badge badge-${r.status}">${t(r.status)}</span>
+          ${r.reviewNote ? `<span style="font-size:11px;color:var(--text-muted)">${r.reviewNote}</span>` : ''}
+        </div>
+      </div>`).join('');
+  } catch(err) { el.innerHTML = `<div style="color:var(--danger)">${err.message}</div>`; }
+}
+
+// ── Admin: Requests ──
+async function loadAdminRequests() {
+  const el = document.getElementById('requests-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading…</div>';
+  try {
+    const reqs = await API.getRequests();
+    pendingCount = reqs.length;
+    document.getElementById('notif-dot').style.display = pendingCount > 0 ? '' : 'none';
+    if (!reqs.length) { el.innerHTML = `<div class="empty-state" style="height:100px"><div>${t('noRequests')}</div></div>`; return; }
+    el.innerHTML = reqs.map(r => `
+      <div class="request-item">
+        <div class="request-meta">From: <strong>${r.fromUser?.displayName || r.fromUser?.username}</strong> · ${r.requestType.replace('change_','').toUpperCase()} · ${new Date(r.createdAt).toLocaleDateString()}</div>
+        <div class="request-value">${r.requestType === 'change_password' ? '(new password — hidden)' : 'New value: ' + r.newValue}</div>
+        ${r.reason ? `<div class="request-meta">Reason: ${r.reason}</div>` : ''}
+        <div class="modal-btns" style="margin-top:8px">
+          <button class="modal-btn primary" style="font-size:11px;padding:5px 12px" onclick="reviewRequest('${r._id}','approved')">${t('approve')}</button>
+          <button class="modal-btn danger"  style="font-size:11px;padding:5px 12px" onclick="reviewRequest('${r._id}','rejected')">${t('reject')}</button>
+        </div>
+      </div>`).join('');
+  } catch(err) { el.innerHTML = `<div style="color:var(--danger)">${err.message}</div>`; }
+}
+
+async function reviewRequest(id, status) {
+  try {
+    await API.reviewRequest(id, { status });
+    showToast(status === 'approved' ? 'Request approved!' : 'Request rejected.', status === 'approved' ? 'success' : 'error');
+    loadAdminRequests();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ── Admin: Users ──
+async function loadUsers() {
+  const el = document.getElementById('users-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading…</div>';
+  try {
+    const users = await API.getUsers();
+    if (!users.length) { el.innerHTML = `<div class="empty-state"><div>${t('noUsers')}</div></div>`; return; }
+    el.innerHTML = `
+      <table class="user-table">
+        <thead><tr><th>User</th><th>Role</th><th>Created</th><th>Last Login</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td>
+                <span class="user-avatar-sm" style="background:${u.avatarColor||'#1f6feb'}">${u.avatar || u.username.slice(0,2).toUpperCase()}</span>
+                <strong>${u.displayName || u.username}</strong><br>
+                <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-en)">${u.username}</span>
+              </td>
+              <td><span class="badge ${u.role==='admin'?'badge-rejected':'badge-approved'}">${u.role}</span></td>
+              <td style="font-family:var(--font-en);font-size:11px;color:var(--text-secondary)">${new Date(u.createdAt).toLocaleDateString()}</td>
+              <td style="font-family:var(--font-en);font-size:11px;color:var(--text-secondary)">${u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : '—'}</td>
+              <td><span class="badge ${u.isActive?'badge-approved':'badge-rejected'}">${u.isActive?'Active':'Inactive'}</span></td>
+              <td style="display:flex;gap:6px;flex-wrap:wrap">
+                ${u._id !== currentUser._id ? `
+                  <button class="modal-btn danger" style="font-size:10px;padding:3px 8px" onclick="deactivateUser('${u._id}')">Deactivate</button>
+                ` : '<span style="font-size:11px;color:var(--text-muted)">You</span>'}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(err) { el.innerHTML = `<div style="color:var(--danger)">${err.message}</div>`; }
+}
+
+async function createUser() {
+  const username    = document.getElementById('cu-username').value.trim();
+  const displayName = document.getElementById('cu-displayname').value.trim();
+  const password    = document.getElementById('cu-password').value;
+  const role        = document.getElementById('cu-role').value;
+  if (!username || !password) { showToast('Username and password required', 'error'); return; }
+  try {
+    await API.createUser({ username, displayName: displayName||username, password, role });
+    showToast(`User "${username}" created!`, 'success');
+    closeAllModals();
+    openModal('users');
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function deactivateUser(id) {
+  if (!confirm('Deactivate this user?')) return;
+  try {
+    await API.deleteUser(id);
+    showToast('User deactivated.', 'success');
+    loadUsers();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+//  FILE ICONS + HELPERS
+// ════════════════════════════════════════════════════════
+const getIcon = (item) => {
+  if (item.type === 'folder') {
+    const sp = { node_modules:'📦', src:'⚛️', components:'🧩', models:'🗃️', routes:'🛣️',
+      documents:'📁', pictures:'🖼️', downloads:'⬇️', desktop:'🖥️', backups:'💾' };
+    return sp[item.name.toLowerCase()] || sp[item._id] || '📁';
+  }
+  const icons = {
+    pdf:'📕',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ppt:'📑',pptx:'📑',
+    jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🎞️',mp4:'🎬',mp3:'🎵',
+    zip:'🗜️',gz:'🗜️',tar:'🗜️',exe:'⚙️',
+    js:'📜',jsx:'⚛️',ts:'📘',tsx:'📘',json:'🔧',md:'📋',
+    env:'🔑',html:'🌐',css:'🎨',py:'🐍',sh:'⌨️',txt:'📄',
+  };
+  return icons[(item.extension||'').toLowerCase()] || '📄';
+};
+
+const getFileSize = (item) => {
+  if (item.type === 'folder' || !item.size) return '—';
+  if (item.size < 1024) return item.size + ' B';
+  if (item.size < 1048576) return (item.size/1024).toFixed(1) + ' KB';
+  return (item.size/1048576).toFixed(1) + ' MB';
+};
+
+const getFileDate = (item) => {
+  const d = new Date(item.modifiedAt || item.updatedAt || Date.now());
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+};
+
+const getFileType = (item) => {
+  if (item.type === 'folder') return t('folder');
+  const m = { pdf:'PDF',docx:'Word',xlsx:'Excel',jpg:'JPEG',png:'PNG',mp4:'Video',mp3:'Audio',zip:'ZIP',exe:'App',js:'JS',jsx:'React',json:'JSON',md:'Markdown',html:'HTML' };
+  return m[(item.extension||'').toLowerCase()] || ((item.extension||'').toUpperCase()+' File');
+};
+
+// ════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════
+async function navigateTo(folderId) {
+  if (folderId === currentPath) return;
+  historyStack = historyStack.slice(0, historyIndex + 1);
+  historyStack.push(folderId); historyIndex = historyStack.length - 1;
+  currentPath = folderId; selectedItem = null;
+  await render();
+}
+
+function goBack() {
+  if (historyIndex > 0) { historyIndex--; currentPath = historyStack[historyIndex]; render(); }
+}
+function goForward() {
+  if (historyIndex < historyStack.length - 1) { historyIndex++; currentPath = historyStack[historyIndex]; render(); }
+}
+async function goUp() {
+  try {
+    const item = await API.getParent(currentPath);
+    if (item?.parentId) navigateTo(item.parentId);
+  } catch {}
+}
+
+// ════════════════════════════════════════════════════════
+//  BREADCRUMB
+// ════════════════════════════════════════════════════════
+async function buildBreadcrumb(folderId) {
+  const ab = document.getElementById('addressbar');
+  const rootId = currentUser?.rootFolderId || 'root';
+  ab.innerHTML = `<span class="breadcrumb ${folderId===rootId?'active':''}" onclick="navigateTo('${rootId}')">🏠 ${t('home')}</span>`;
+  if (folderId !== rootId) {
+    ab.innerHTML += `<span class="breadcrumb-sep">›</span><span class="breadcrumb active">${folderId}</span>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════
+async function render() {
+  setLoading(true);
+  try {
+    let items = await API.getFolderContent(currentPath);
+    currentItems = items;
+
+    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    if (q) items = items.filter(i => i.name.toLowerCase().includes(q));
+
+    items = [...items].sort((a,b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      let av = a.name, bv = b.name;
+      if (sortCol === 'date') { av = a.modifiedAt; bv = b.modifiedAt; }
+      if (sortCol === 'size') { av = a.size||0;    bv = b.size||0; }
+      if (av < bv) return -sortDir; if (av > bv) return sortDir; return 0;
+    });
+
+    buildBreadcrumb(currentPath);
+    document.getElementById('btn-back').disabled    = historyIndex <= 0;
+    document.getElementById('btn-forward').disabled = historyIndex >= historyStack.length - 1;
+
+    // Sidebar active
+    document.querySelectorAll('#sidebar-personal .sidebar-item').forEach(el => {
+      el.classList.toggle('active', el.id === 'snav-' + currentPath);
+    });
+    const rootNav = document.getElementById('nav-root');
+    if (rootNav) rootNav.classList.toggle('active', currentPath === currentUser?.rootFolderId);
+
+    const content = document.getElementById('content');
+    content.innerHTML = '';
+
+    if (!items.length) {
+      content.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><div>This folder is empty</div></div>';
+    } else if (viewMode === 'grid') {
+      const grid = document.createElement('div');
+      grid.id = 'file-grid';
+      items.forEach((item,idx) => {
+        const el = document.createElement('div');
+        el.className = 'file-item' + (selectedItem?._id === item._id ? ' selected' : '');
+        el.dataset.id = item._id;
+        el.style.animationDelay = `${idx * 0.018}s`;
+        el.innerHTML = `<div class="file-icon">${getIcon(item)}</div><div class="file-name">${item.name}</div>`;
+        el.addEventListener('click', e => { e.stopPropagation(); selectItem(item); });
+        el.addEventListener('dblclick', () => { if (item.type==='folder') navigateTo(item._id); else downloadItem(item); });
+        el.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e,item); });
+        grid.appendChild(el);
+      });
+      content.appendChild(grid);
+    } else {
+      const table = document.createElement('table');
+      table.id = 'list-view';
+      const mkTh = (col,label) => {
+        const active = sortCol === col;
+        return `<th class="${active?'sorted':''}" onclick="toggleSort('${col}')">${label}${active?`<span class="sort-arrow">${sortDir>0?'▲':'▼'}</span>`:''}</th>`;
+      };
+      table.innerHTML = `<thead><tr>${mkTh('name','Name')}${mkTh('date','Date')}${mkTh('type','Type')}${mkTh('size','Size')}</tr></thead><tbody></tbody>`;
+      const tbody = table.querySelector('tbody');
+      items.forEach((item,idx) => {
+        const tr = document.createElement('tr');
+        tr.className = selectedItem?._id === item._id ? 'selected' : '';
+        tr.dataset.id = item._id;
+        tr.style.animationDelay = `${idx * 0.014}s`;
+        tr.innerHTML = `
+          <td class="col-name"><div class="list-name-cell"><span class="list-icon">${getIcon(item)}</span><span class="list-name-text">${item.name}</span></div></td>
+          <td class="col-date list-date">${getFileDate(item)}</td>
+          <td class="col-type list-type">${getFileType(item)}</td>
+          <td class="col-size list-size">${getFileSize(item)}</td>`;
+        tr.addEventListener('click', e => { e.stopPropagation(); selectItem(item); });
+        tr.addEventListener('dblclick', () => { if (item.type==='folder') navigateTo(item._id); else downloadItem(item); });
+        tr.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e,item); });
+        tbody.appendChild(tr);
+      });
+      content.appendChild(table);
+    }
+
+    const total = currentItems.length;
+    document.getElementById('status-count').textContent = `${total} item${total!==1?'s':''}`;
+    document.getElementById('status-selected').textContent = selectedItem ? `"${selectedItem.name}" selected` : '';
+  } catch(err) {
+    showToast('Load failed: ' + err.message, 'error');
+    document.getElementById('content').innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><div>${err.message}</div></div>`;
+  } finally {
+    setLoading(false);
+  }
+}
+
+function toggleSort(col) {
+  if (sortCol === col) sortDir = -sortDir;
+  else { sortCol = col; sortDir = 1; }
+  render();
+}
+
+function selectItem(item) {
+  selectedItem = item;
+  document.querySelectorAll('.file-item, #list-view tbody tr').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === item._id);
+  });
+  document.getElementById('status-selected').textContent = `"${item.name}" selected`;
+}
+
+async function downloadItem(item) {
+  if (!item.cloudUrl && !item.publicId) { showToast('No cloud file for this item', 'error'); return; }
+  try {
+    const url = await API.getDownloadUrl(item._id);
+    window.open(url, '_blank');
+  } catch(err) { showToast('Download failed: ' + err.message, 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+//  CONTEXT MENU
+// ════════════════════════════════════════════════════════
+function showContextMenu(e, item) {
+  ctxTargetItem = item; selectItem(item);
+  const menu = document.getElementById('ctx-menu');
+  document.getElementById('ctx-open').style.display     = item.type==='folder' ? '' : 'none';
+  document.getElementById('ctx-download').style.display = item.type==='file'   ? '' : 'none';
+  let x=e.clientX, y=e.clientY;
+  if (x+190 > window.innerWidth)  x = window.innerWidth  - 195;
+  if (y+200 > window.innerHeight) y = window.innerHeight - 205;
+  menu.style.left = x+'px'; menu.style.top = y+'px';
+  menu.classList.add('visible');
+}
+function showEmptyContextMenu(e) {
+  ctxTargetItem = null;
+  const menu = document.getElementById('ctx-menu');
+  document.getElementById('ctx-open').style.display     = 'none';
+  document.getElementById('ctx-download').style.display = 'none';
+  document.getElementById('ctx-rename').style.display   = 'none';
+  document.getElementById('ctx-delete').style.display   = 'none';
+  let x=e.clientX, y=e.clientY;
+  if (x+190 > window.innerWidth)  x = window.innerWidth  - 195;
+  if (y+80  > window.innerHeight) y = window.innerHeight - 85;
+  menu.style.left = x+'px'; menu.style.top = y+'px';
+  menu.classList.add('visible');
+}
+function hideContextMenu() {
+  document.getElementById('ctx-menu').classList.remove('visible');
+  ['ctx-rename','ctx-delete'].forEach(id => document.getElementById(id).style.display='');
+}
+
+// ════════════════════════════════════════════════════════
+//  UPLOAD
+// ════════════════════════════════════════════════════════
+async function handleUpload(files) {
+  if (!files.length) return;
+  setLoading(true);
+  try {
+    for (const file of files) {
+      await API.uploadFile(currentPath, file);
+      showToast(`"${file.name}" uploaded`, 'success');
+    }
+    await render();
+  } catch(err) { showToast('Upload failed: ' + err.message, 'error');
+  } finally { setLoading(false); }
+}
+
+// ════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ════════════════════════════════════════════════════════
+document.getElementById('btn-back').addEventListener('click', goBack);
+document.getElementById('btn-forward').addEventListener('click', goForward);
+document.getElementById('btn-up').addEventListener('click', goUp);
+document.getElementById('btn-refresh').addEventListener('click', render);
+document.getElementById('btn-new-folder').addEventListener('click', () => openModal('newFolder'));
+document.getElementById('btn-view-grid').addEventListener('click', () => {
+  viewMode='grid';
+  document.getElementById('btn-view-grid').classList.add('active');
+  document.getElementById('btn-view-list').classList.remove('active');
+  render();
+});
+document.getElementById('btn-view-list').addEventListener('click', () => {
+  viewMode='list';
+  document.getElementById('btn-view-list').classList.add('active');
+  document.getElementById('btn-view-grid').classList.remove('active');
+  render();
+});
+document.getElementById('search-input').addEventListener('input', render);
+document.getElementById('btn-upload').addEventListener('click', () => document.getElementById('file-upload-input').click());
+document.getElementById('file-upload-input').addEventListener('change', e => { handleUpload(Array.from(e.target.files)); e.target.value=''; });
+document.getElementById('content').addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
+document.getElementById('content').addEventListener('drop', e => { e.preventDefault(); handleUpload(Array.from(e.dataTransfer.files)); });
+document.getElementById('btn-confirm').addEventListener('click', confirmModal);
+
+document.getElementById('ctx-open').addEventListener('click', () => { if(ctxTargetItem?.type==='folder') navigateTo(ctxTargetItem._id); hideContextMenu(); });
+document.getElementById('ctx-download').addEventListener('click', () => { if(ctxTargetItem) downloadItem(ctxTargetItem); hideContextMenu(); });
+document.getElementById('ctx-rename').addEventListener('click', () => { const n=ctxTargetItem?.name||''; hideContextMenu(); openModal('rename',n); });
+document.getElementById('ctx-new-folder-ctx').addEventListener('click', () => { hideContextMenu(); openModal('newFolder'); });
+document.getElementById('ctx-delete').addEventListener('click', async () => {
+  if (ctxTargetItem) {
+    try { await API.deleteItem(ctxTargetItem._id); selectedItem=null; await render(); showToast('Deleted','success');
+    } catch(err) { showToast(err.message,'error'); }
+  }
+  hideContextMenu();
+});
+
+document.getElementById('content').addEventListener('contextmenu', e => {
+  const hit = e.target.closest('.file-item, #list-view tbody tr');
+  if (!hit) { e.preventDefault(); showEmptyContextMenu(e); }
+});
+document.addEventListener('click', e => {
+  hideContextMenu();
+  if (!e.target.closest('#profile-panel') && !e.target.closest('#user-chip')) closeProfile();
+});
+
+document.addEventListener('keydown', e => {
+  const anyModal = [...document.querySelectorAll('.modal-overlay')].some(m=>m.classList.contains('visible'));
+  if (e.key==='Escape') { closeAllModals(); hideContextMenu(); }
+  if (e.key==='Enter' && document.getElementById('modal-overlay').classList.contains('visible')) confirmModal();
+  if (e.key==='Backspace' && !anyModal && document.activeElement===document.body) goBack();
+  if (e.key==='Delete' && !anyModal && selectedItem) {
+    API.deleteItem(selectedItem._id).then(()=>{ selectedItem=null; render(); showToast('Deleted','success'); }).catch(err=>showToast(err.message,'error'));
+  }
+  if (e.key==='F5') { e.preventDefault(); render(); }
+});
+
+// Login: enter key
+document.getElementById('input-password').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('btn-login').addEventListener('click', doLogin);
+
+// ════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════
+(async () => {
+  // Apply theme from localStorage immediately
+  const savedTheme = localStorage.getItem('fe_theme') || 'dark';
+  applyTheme(savedTheme);
+  applyLang();
+
+  // Auto-seed if needed
+  try {
+    const r = await fetch(BASE_URL + '/health');
+    if (r.ok) {
+      await API.seed().catch(() => {});
+    }
+  } catch {}
+
+  // If we have a saved token, try auto-login
+  if (token && currentUser) {
+    try {
+      await API.getMe(); // validates token
+      bootApp();
+      return;
+    } catch {
+      token = null; currentUser = null;
+      localStorage.removeItem('fe_token');
+      localStorage.removeItem('fe_user');
+    }
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Render Deployment Configuration
+services:
+  - type: web
+    name: file-explorer-pro
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        sync: false  # Set this in Render dashboard
+      - key: CLIENT_URL
+        sync: false  # Set this to your Render URL (e.g., https://file-explorer-pro.onrender.com)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_KEY
+        sync: false  # Set this in Render dashboard
+      - key: CLOUDINARY_API_SECRET
+        sync: false  # Set this in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Auto-generate or set your own
